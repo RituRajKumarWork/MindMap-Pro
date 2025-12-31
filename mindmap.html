@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MindMap Editor</title>
+    <style>
+        :root { --primary: #6366f1; --bg: #f0f2f5; --surface: #ffffff; --border: #cbd5e1; --line: #94a3b8; }
+        body.dark { --bg: #0f172a; --surface: #1e293b; --border: #334155; --line: #475569; color: white; }
+        body { font-family: sans-serif; background: var(--bg); margin: 0; overflow: hidden; width: 100vw; height: 100vh; user-select: none; }
+        
+        /* Overlays */
+        .overlay { position: fixed; z-index: 100; background: rgba(255,255,255,0.9); padding: 8px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.1); backdrop-filter: blur(4px); display: flex; gap: 8px; }
+        body.dark .overlay { background: rgba(30, 41, 59, 0.9); border-color: var(--border); }
+        .top-left { top: 20px; left: 20px; flex-direction: column; }
+        .top-right { top: 20px; right: 20px; align-items: center; }
+        .bottom-right { bottom: 20px; right: 20px; flex-direction: column; }
+
+        button.icon-btn { width: 36px; height: 36px; border: 1px solid transparent; background: transparent; border-radius: 8px; cursor: pointer; font-size: 16px; color: #475569; transition: 0.2s; }
+        button.icon-btn:hover { background: #e2e8f0; color: var(--primary); }
+        body.dark button.icon-btn { color: #cbd5e1; }
+        body.dark button.icon-btn:hover { background: #334155; }
+        .save-badge { padding: 4px 12px; border-radius: 20px; background: #dcfce7; color: #166534; font-size: 12px; font-weight: bold; }
+
+        /* Canvas */
+        #canvas-wrapper { width: 100%; height: 100%; cursor: grab; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 24px 24px; position: relative; }
+        body.dark #canvas-wrapper { background-image: radial-gradient(#334155 1px, transparent 1px); }
+        #canvas-content { position: absolute; top: 0; left: 0; width: 100%; display: flex; justify-content: center; transform-origin: top center; padding-bottom: 400px; }
+
+        /* Nodes */
+        .node-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; animation: pop 0.2s ease-out; z-index: 10; }
+        @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        
+        /* Lines */
+        .line-up { position: absolute; top: -32px; left: 50%; width: 2px; height: 32px; background: var(--line); transform: translateX(-50%); }
+        .line-down { position: absolute; top: -16px; left: 50%; width: 2px; height: 16px; background: var(--line); transform: translateX(-50%); }
+        .children-container { position: relative; margin-top: 48px; display: flex; gap: 40px; padding-top: 16px; }
+        .cross-bar { position: absolute; top: 0; left: 0; right: 0; height: 16px; border-top: 2px solid var(--line); margin: 0 auto; width: calc(100% - 2rem); }
+
+        /* Card Styles */
+        .node-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: relative; transition: 0.2s; cursor: pointer; display: flex; flex-direction: column; overflow: hidden; min-height: 50px; }
+        .node-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px rgba(0,0,0,0.1); border-color: var(--primary); }
+        .node-card.root { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: 4px solid white; text-align: center; justify-content: center; align-items: center; }
+        
+        .small { width: 140px; font-size: 12px; }
+        .medium { width: 200px; font-size: 14px; }
+        .large { width: 280px; font-size: 16px; }
+        .root.small { width: 100px; height: 100px; border-radius: 50%; }
+        .root.medium { width: 150px; height: 150px; border-radius: 50%; }
+        .root.large { width: 200px; height: 200px; border-radius: 50%; }
+
+        .node-img { width: 100%; height: 100px; object-fit: cover; background: #e2e8f0; display: block; }
+        .root .node-img { width: 60px; height: 60px; border-radius: 50%; border: 2px solid white; margin-bottom: 8px; }
+        .node-body { padding: 12px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .node-title { font-weight: bold; word-break: break-word; line-height: 1.3; }
+        .price-tag { align-self: flex-start; background: #dcfce7; color: #166534; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-top: 4px; }
+        .link-icon { position: absolute; top: 8px; right: 8px; background: white; color: var(--primary); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-decoration: none; z-index: 5; }
+
+        /* Actions Overlay */
+        .actions { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; gap: 8px; opacity: 0; transition: opacity 0.2s; z-index: 20; }
+        .node-card:hover .actions { opacity: 1; }
+        .act-btn { width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .btn-add { background: #6366f1; color: white; }
+        .btn-edit { background: white; color: #333; }
+        .btn-del { background: #ef4444; color: white; }
+
+        .expand-btn { position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%); width: 24px; height: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 15; font-size: 10px; color: #64748b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .expand-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        .modal-window { background: var(--surface); width: 90%; max-width: 450px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh; }
+        .modal-header { background: linear-gradient(to right, #6366f1, #8b5cf6); padding: 16px 20px; color: white; display: flex; justify-content: space-between; align-items: center; font-weight: bold; flex-shrink: 0; }
+        .modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+        
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.5px; }
+        .form-input { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: inherit; outline: none; font-size: 14px; transition: border 0.2s; }
+        .form-input:focus { border-color: var(--primary); }
+        
+        .form-row { display: flex; gap: 12px; }
+        
+        /* Gallery Styles */
+        .gallery-area { border: 2px dashed var(--border); padding: 10px; border-radius: 8px; text-align: center; background: rgba(0,0,0,0.02); transition: 0.2s; }
+        .gallery-area:hover { border-color: var(--primary); background: rgba(99, 102, 241, 0.05); }
+        .gallery-grid { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; padding-bottom: 4px; }
+        .thumb-wrap { position: relative; width: 50px; height: 50px; flex-shrink: 0; cursor: pointer; border-radius: 6px; overflow: hidden; border: 2px solid transparent; transition: 0.2s; }
+        .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .thumb-wrap:hover { transform: scale(1.05); }
+        .thumb-wrap.selected { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2); }
+        .thumb-del { position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.5); color: white; border: none; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.2s; }
+        .thumb-wrap:hover .thumb-del { opacity: 1; }
+
+        .btn-row { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 20px; background: rgba(0,0,0,0.02); border-top: 1px solid var(--border); flex-shrink: 0; }
+        .btn-cancel { border: none; background: none; color: #64748b; cursor: pointer; font-weight: bold; padding: 8px 16px; }
+        .btn-save { background: #6366f1; color: white; border: none; padding: 8px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3); transition: 0.2s; }
+        .btn-save:hover { background: #4f46e5; transform: translateY(-1px); }
+
+        .size-select { display: flex; background: var(--bg); padding: 4px; border-radius: 8px; border: 1px solid var(--border); }
+        .size-opt { flex: 1; border: none; background: none; padding: 6px; font-size: 12px; cursor: pointer; border-radius: 6px; color: #64748b; font-weight: 600; }
+        .size-opt.active { background: #6366f1; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="overlay top-left">
+        <button class="icon-btn" id="btn-back" title="Back">⬅</button>
+        <div style="display:flex; gap:4px; margin-top:4px;">
+            <button class="icon-btn" id="btn-undo" title="Undo">↩</button>
+            <button class="icon-btn" id="btn-redo" title="Redo">↪</button>
+        </div>
+        <button class="icon-btn" id="btn-theme" title="Theme">◑</button>
+    </div>
+
+    <div class="overlay top-right">
+        <button class="icon-btn" id="btn-download" title="Download">⬇</button>
+        <div class="save-badge" id="save-indicator">Saved</div>
+    </div>
+
+    <div class="overlay bottom-right">
+        <button class="icon-btn" id="btn-zoom-in">+</button>
+        <button class="icon-btn" id="btn-zoom-out">-</button>
+        <button class="icon-btn" id="btn-reset">⌖</button>
+    </div>
+
+    <div id="canvas-wrapper">
+        <div id="canvas-content"></div>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-window">
+            <div class="modal-header">
+                <span id="modal-title">Edit Node</span>
+                <button id="btn-close-modal" style="background:none; border:none; color:white; font-size:20px; cursor:pointer;">×</button>
+            </div>
+            <div class="modal-body">
+                
+                <div class="form-group">
+                    <label>Images (Paste via Ctrl+V or Upload)</label>
+                    <div class="gallery-area">
+                        <label style="cursor:pointer; color:var(--primary); font-size:13px; font-weight:bold;">
+                            Click to Upload
+                            <input type="file" id="file-input" accept="image/*" style="display:none;">
+                        </label>
+                        <div style="font-size:10px; color:#94a3b8; margin-top:4px;">or paste image from clipboard</div>
+                        <div id="gallery-preview" class="gallery-grid"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="input-name" class="form-input" placeholder="Enter node name...">
+                </div>
+                
+                <div class="form-group">
+                    <label>Card Size</label>
+                    <div class="size-select">
+                        <button class="size-opt" id="size-small">Small</button>
+                        <button class="size-opt" id="size-medium">Medium</button>
+                        <button class="size-opt" id="size-large">Large</button>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group" style="flex:1">
+                        <label>Category</label>
+                        <input type="text" id="input-cat" class="form-input" placeholder="e.g. Logic">
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label>Price</label>
+                        <input type="text" id="input-price" class="form-input" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Link URL</label>
+                    <input type="text" id="input-link" class="form-input" placeholder="https://example.com">
+                </div>
+
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="input-note" class="form-input" rows="3" placeholder="Add details here..."></textarea>
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="btn-cancel" id="btn-cancel-modal">Cancel</button>
+                <button class="btn-save" id="btn-save-modal">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="mindmap.js"></script>
+</body>
+</html>
