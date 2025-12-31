@@ -2,7 +2,9 @@
 
 A powerful, **100% offline** Mind Mapping tool built as a Chrome Extension. No internet required, no external servers, and no data tracking. Everything is saved locally in your browser.
 
-![MindMap Pro Banner]<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/deb8bdc2-0821-4215-8cb4-eab9aff74b30" />
+Interface
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/deb8bdc2-0821-4215-8cb4-eab9aff74b30" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/98afbe03-eb04-42c8-94fc-d7776cf047e8" />
 
 
 ## ✨ Features
